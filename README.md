@@ -1,6 +1,6 @@
 # UZIP.js
 
-Simple and fast and tiny ZIP library. It has our own DEFLATE compressor and decompressor (alternative to pako.js / ZLIB).
+Simple, tiny and fast ZIP library. It has our own DEFLATE compressor and decompressor (alternative to pako.js / ZLIB).
 
 #### `UZIP.parse(buff)`
 * `buff`: ArrayBuffer of the ZIP file
