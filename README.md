@@ -2,6 +2,8 @@
 
 Simple, tiny and fast ZIP library. It has our own DEFLATE compressor and decompressor (alternative to pako.js / ZLIB).
 
+If you just need decompression, you can use UZIP-inflate-only.js for an even smaller footprint.
+
 #### `UZIP.parse(buff)`
 * `buff`: ArrayBuffer of the ZIP file
 * returns an object with `key : property` pairs, where `key` is a file name (String), and `property` is a file (Uint8Array)
