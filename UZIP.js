@@ -8,18 +8,18 @@ UZIP["parse"] = function(buf)	// ArrayBuffer
 	var rUs = UZIP.bin.readUshort, rUi = UZIP.bin.readUint, o = 0, out = {};
 	var data = new Uint8Array(buf);
 	var eocd = data.length-4;
-	
+
 	while(rUi(data, eocd)!=0x06054b50) eocd--;
-	
+
 	var o = eocd;
 	o+=4;	// sign  = 0x06054b50
 	o+=4;  // disks = 0;
 	var cnu = rUs(data, o);  o+=2;
 	var cnt = rUs(data, o);  o+=2;
-			
+
 	var csize = rUi(data, o);  o+=4;
 	var coffs = rUi(data, o);  o+=4;
-	
+
 	o = coffs;
 	for(var i=0; i<cnu; i++)
 	{
@@ -27,17 +27,17 @@ UZIP["parse"] = function(buf)	// ArrayBuffer
 		o += 4;  // versions;
 		o += 4;  // flag + compr
 		o += 4;  // time
-		
+
 		var crc32 = rUi(data, o);  o+=4;
 		var csize = rUi(data, o);  o+=4;
 		var usize = rUi(data, o);  o+=4;
-		
+
 		var nl = rUs(data, o), el = rUs(data, o+2), cl = rUs(data, o+4);  o += 6;  // name, extra, comment
 		o += 8;  // disk, attribs
-		
+
 		var roff = rUi(data, o);  o+=4;
 		o += nl + el + cl;
-		
+
 		UZIP._readLocal(data, roff, out, csize, usize);
 	}
 	//console.log(out);
@@ -52,22 +52,22 @@ UZIP._readLocal = function(data, o, out, csize, usize)
 	var gpflg = rUs(data, o);  o+=2;
 	//if((gpflg&8)!=0) throw "unknown sizes";
 	var cmpr  = rUs(data, o);  o+=2;
-	
+
 	var time  = rUi(data, o);  o+=4;
-	
+
 	var crc32 = rUi(data, o);  o+=4;
 	//var csize = rUi(data, o);  o+=4;
 	//var usize = rUi(data, o);  o+=4;
 	o+=8;
-		
+
 	var nlen  = rUs(data, o);  o+=2;
 	var elen  = rUs(data, o);  o+=2;
-		
+
 	var name =  UZIP.bin.readUTF8(data, o, nlen);  o+=nlen;
 	o += elen;
-			
+
 	//console.log(sign.toString(16), ver, gpflg, cmpr, crc32.toString(16), "csize, usize", csize, usize, nlen, elen, name, o);
-			
+
 	var file = new Uint8Array(data.buffer, o);
 	if(false) {}
 	else if(cmpr==0) out[name] = new Uint8Array(file.buffer.slice(o, o+csize));
@@ -81,11 +81,11 @@ UZIP._readLocal = function(data, o, out, csize, usize)
 }
 
 UZIP.inflateRaw = function(file, buf) {  return UZIP.F.inflate(file, buf);  }
-UZIP.inflate    = function(file, buf) { 
+UZIP.inflate    = function(file, buf) {
 	var CMF = file[0], FLG = file[1];
 	var CM = (CMF&15), CINFO = (CMF>>>4);
 	//console.log(CM, CINFO,CMF,FLG);
-	return UZIP.inflateRaw(new Uint8Array(file.buffer, file.byteOffset+2, file.length-6), buf);  
+	return UZIP.inflateRaw(new Uint8Array(file.buffer, file.byteOffset+2, file.length-6), buf);
 }
 UZIP.deflate    = function(data, opts/*, buf, off*/) {
 	if(opts==null) opts={level:6};
@@ -93,10 +93,10 @@ UZIP.deflate    = function(data, opts/*, buf, off*/) {
 	buf[off]=120;  buf[off+1]=156;  off+=2;
 	off = UZIP.F.deflateRaw(data, buf, off, opts.level);
 	var crc = UZIP.adler(data, 0, data.length);
-	buf[off+0]=((crc>>>24)&255); 
-	buf[off+1]=((crc>>>16)&255); 
-	buf[off+2]=((crc>>> 8)&255); 
-	buf[off+3]=((crc>>> 0)&255); 	
+	buf[off+0]=((crc>>>24)&255);
+	buf[off+1]=((crc>>>16)&255);
+	buf[off+2]=((crc>>> 8)&255);
+	buf[off+3]=((crc>>> 0)&255);
 	return new Uint8Array(buf.buffer, 0, off+4);
 }
 UZIP.deflateRaw = function(data, opts) {
@@ -110,15 +110,15 @@ UZIP.deflateRaw = function(data, opts) {
 UZIP.encode = function(obj) {
 	var tot = 0, wUi = UZIP.bin.writeUint, wUs = UZIP.bin.writeUshort;
 	var zpd = {};
-	for(var p in obj) {  var cpr = !UZIP._noNeed(p), buf = obj[p], crc = UZIP.crc.crc(buf,0,buf.length); 
+	for(var p in obj) {  var cpr = !UZIP._noNeed(p), buf = obj[p], crc = UZIP.crc.crc(buf,0,buf.length);
 		zpd[p] = {  cpr:cpr, usize:buf.length, crc:crc, file: (cpr ? UZIP.deflateRaw(buf) : buf)  };  }
-	
+
 	for(var p in zpd) tot += zpd[p].file.length + 30 + 46 + 2*UZIP.bin.sizeUTF8(p);
 	tot +=  22;
-	
+
 	var data = new Uint8Array(tot), o = 0;
 	var fof = []
-	
+
 	for(var p in zpd) {
 		var file = zpd[p];  fof.push(o);
 		o = UZIP._writeHeader(data, o, p, file, 0);
@@ -126,10 +126,10 @@ UZIP.encode = function(obj) {
 	var i=0, ioff = o;
 	for(var p in zpd) {
 		var file = zpd[p];  fof.push(o);
-		o = UZIP._writeHeader(data, o, p, file, 1, fof[i++]);		
+		o = UZIP._writeHeader(data, o, p, file, 1, fof[i++]);
 	}
 	var csize = o-ioff;
-	
+
 	wUi(data, o, 0x06054b50);  o+=4;
 	o += 4;  // disks
 	wUs(data, o, i);  o += 2;
@@ -146,28 +146,28 @@ UZIP._writeHeader = function(data, o, p, obj, t, roff)
 {
 	var wUi = UZIP.bin.writeUint, wUs = UZIP.bin.writeUshort;
 	var file = obj.file;
-	
+
 	wUi(data, o, t==0 ? 0x04034b50 : 0x02014b50);  o+=4; // sign
 	if(t==1) o+=2;  // ver made by
 	wUs(data, o, 20);  o+=2;	// ver
 	wUs(data, o,  0);  o+=2;    // gflip
 	wUs(data, o,  obj.cpr?8:0);  o+=2;	// cmpr
-		
-	wUi(data, o,  0);  o+=4;	// time		
+
+	wUi(data, o,  0);  o+=4;	// time
 	wUi(data, o, obj.crc);  o+=4;	// crc32
 	wUi(data, o, file.length);  o+=4;	// csize
 	wUi(data, o, obj.usize);  o+=4;	// usize
-		
+
 	wUs(data, o, UZIP.bin.sizeUTF8(p));  o+=2;	// nlen
 	wUs(data, o, 0);  o+=2;	// elen
-	
+
 	if(t==1) {
 		o += 2;  // comment length
 		o += 2;  // disk number
 		o += 6;  // attributes
 		wUi(data, o, roff);  o+=4;	// usize
 	}
-	var nlen = UZIP.bin.writeUTF8(data, o, p);  o+= nlen;	
+	var nlen = UZIP.bin.writeUTF8(data, o, p);  o+= nlen;
 	if(t==0) {  data.set(file, o);  o += file.length;  }
 	return o;
 }
@@ -185,7 +185,7 @@ UZIP.crc = {
 				if (c & 1)  c = 0xedb88320 ^ (c >>> 1);
 				else        c = c >>> 1;
 			}
-			tab[n] = c;  }    
+			tab[n] = c;  }
 		return tab;  })(),
 	update : function(c, buf, off, len) {
 		for (var i=0; i<len; i++)  c = UZIP.crc.table[(c ^ buf[off+i]) & 0xff] ^ (c >>> 8);
@@ -273,12 +273,12 @@ UZIP.bin = {
 
 UZIP.F = {};
 
-UZIP.F.deflateRaw = function(data, out, opos, lvl) {	
+UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 	var opts = [
 	/*
-		 ush good_length; /* reduce lazy search above this match length 
-		 ush max_lazy;    /* do not perform lazy search above this match length 
-         ush nice_length; /* quit search above this match length 
+		 ush good_length; /* reduce lazy search above this match length
+		 ush max_lazy;    /* do not perform lazy search above this match length
+         ush nice_length; /* quit search above this match length
 	*/
 	/*      good lazy nice chain */
 	/* 0 */ [ 0,   0,   0,    0,0],  /* store only */
@@ -292,13 +292,13 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 	/* 7 */ [ 8,  32, 128,  256,0],
 	/* 8 */ [32, 128, 258, 1024,1],
 	/* 9 */ [32, 258, 258, 4096,1]]; /* max compression */
-	
+
 	var opt = opts[lvl];
-	
-	
+
+
 	var U = UZIP.F.U, goodIndex = UZIP.F._goodIndex, hash = UZIP.F._hash, putsE = UZIP.F._putsE;
 	var i = 0, pos = opos<<3, cvrd = 0, dlen = data.length;
-	
+
 	if(lvl==0) {
 		while(i<dlen) {   var len = Math.min(0xffff, dlen-i);
 			putsE(out, pos, (i+len==dlen ? 1 : 0));  pos = UZIP.F._copyExact(data, i, len, out, pos+8);  i += len;  }
@@ -308,7 +308,7 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 	var lits = U.lits, strt=U.strt, prev=U.prev, li=0, lc=0, bs=0, ebits=0, c=0, nc=0;  // last_item, literal_count, block_start
 	if(dlen>2) {  nc=UZIP.F._hash(data,0);  strt[nc]=0;  }
 	var nmch=0,nmci=0;
-	
+
 	for(i=0; i<dlen; i++)  {
 		c = nc;
 		//*
@@ -323,9 +323,9 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 				if(cvrd<i) {  lits[li]=i-cvrd;  li+=2;  cvrd=i;  }
 				pos = UZIP.F._writeBlock(((i==dlen-1) || (cvrd==dlen))?1:0, lits, li, ebits, data,bs,i-bs, out, pos);  li=lc=ebits=0;  bs=i;
 			}
-			
+
 			var mch = 0;
-			//if(nmci==i) mch= nmch;  else 
+			//if(nmci==i) mch= nmch;  else
 			if(i<dlen-2) mch = UZIP.F._bestMatch(data, i, prev, c, Math.min(opt[2],dlen-i), opt[3]);
 			/*
 			if(mch!=0 && opt[4]==1 && (mch>>>16)<opt[1] && i+1<dlen-2) {
@@ -334,12 +334,12 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 				if((nmch>>>16)>(mch>>>16)) mch=0;
 			}//*/
 			var len = mch>>>16, dst = mch&0xffff;  //if(i-dst<0) throw "e";
-			if(mch!=0) { 
+			if(mch!=0) {
 				var len = mch>>>16, dst = mch&0xffff;  //if(i-dst<0) throw "e";
-				var lgi = goodIndex(len, U.of0);  U.lhst[257+lgi]++; 
-				var dgi = goodIndex(dst, U.df0);  U.dhst[    dgi]++;  ebits += U.exb[lgi] + U.dxb[dgi]; 
+				var lgi = goodIndex(len, U.of0);  U.lhst[257+lgi]++;
+				var dgi = goodIndex(dst, U.df0);  U.dhst[    dgi]++;  ebits += U.exb[lgi] + U.dxb[dgi];
 				lits[li] = (len<<23)|(i-cvrd);  lits[li+1] = (dst<<16)|(lgi<<8)|dgi;  li+=2;
-				cvrd = i + len;  
+				cvrd = i + len;
 			}
 			else {	U.lhst[data[i]]++;  }
 			lc++;
@@ -353,7 +353,7 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 	return pos>>>3;
 }
 UZIP.F._bestMatch = function(data, i, prev, c, nice, chain) {
-	var ci = (i&0x7fff), pi=prev[ci];  
+	var ci = (i&0x7fff), pi=prev[ci];
 	//console.log("----", i);
 	var dif = ((ci-pi + (1<<15)) & 0x7fff);  if(pi==ci || c!=UZIP.F._hash(data,i-dif)) return 0;
 	var tl=0, td=0;  // top length, top distance
@@ -361,8 +361,8 @@ UZIP.F._bestMatch = function(data, i, prev, c, nice, chain) {
 	while(dif<=dlim && --chain!=0 && pi!=ci /*&& c==UZIP.F._hash(data,i-dif)*/) {
 		if(tl==0 || (data[i+tl]==data[i+tl-dif])) {
 			var cl = UZIP.F._howLong(data, i, dif);
-			if(cl>tl) {  
-				tl=cl;  td=dif;  if(tl>=nice) break;    //* 
+			if(cl>tl) {
+				tl=cl;  td=dif;  if(tl>=nice) break;    //*
 				if(dif+2<cl) cl = dif+2;
 				var maxd = 0; // pi does not point to the start of the word
 				for(var j=0; j<cl-2; j++) {
@@ -373,7 +373,7 @@ UZIP.F._bestMatch = function(data, i, prev, c, nice, chain) {
 				}  //*/
 			}
 		}
-		
+
 		ci=pi;  pi = prev[ci];
 		dif += ((ci-pi + (1<<15)) & 0x7fff);
 	}
@@ -400,21 +400,21 @@ UZIP.F._hash = function(data, i) {
 UZIP.saved = 0;
 UZIP.F._writeBlock = function(BFINAL, lits, li, ebits, data,o0,l0, out, pos) {
 	var U = UZIP.F.U, putsF = UZIP.F._putsF, putsE = UZIP.F._putsE;
-	
+
 	//*
 	var T, ML, MD, MH, numl, numd, numh, lset, dset;  U.lhst[256]++;
 	T = UZIP.F.getTrees(); ML=T[0]; MD=T[1]; MH=T[2]; numl=T[3]; numd=T[4]; numh=T[5]; lset=T[6]; dset=T[7];
-	
+
 	var cstSize = (((pos+3)&7)==0 ? 0 : 8-((pos+3)&7)) + 32 + (l0<<3);
 	var fxdSize = ebits + UZIP.F.contSize(U.fltree, U.lhst) + UZIP.F.contSize(U.fdtree, U.dhst);
 	var dynSize = ebits + UZIP.F.contSize(U.ltree , U.lhst) + UZIP.F.contSize(U.dtree , U.dhst);
 	dynSize    += 14 + 3*numh + UZIP.F.contSize(U.itree, U.ihst) + (U.ihst[16]*2 + U.ihst[17]*3 + U.ihst[18]*7);
-	
+
 	for(var j=0; j<286; j++) U.lhst[j]=0;   for(var j=0; j<30; j++) U.dhst[j]=0;   for(var j=0; j<19; j++) U.ihst[j]=0;
 	//*/
 	var BTYPE = (cstSize<fxdSize && cstSize<dynSize) ? 0 : ( fxdSize<dynSize ? 1 : 2 );
 	putsF(out, pos, BFINAL);  putsF(out, pos+1, BTYPE);  pos+=3;
-	
+
 	var opos = pos;
 	if(BTYPE==0) {
 		while((pos&7)!=0) pos++;
@@ -423,32 +423,32 @@ UZIP.F._writeBlock = function(BFINAL, lits, li, ebits, data,o0,l0, out, pos) {
 	else {
 		var ltree, dtree;
 		if(BTYPE==1) {  ltree=U.fltree;  dtree=U.fdtree;  }
-		if(BTYPE==2) {	
+		if(BTYPE==2) {
 			UZIP.F.makeCodes(U.ltree, ML);  UZIP.F.revCodes(U.ltree, ML);
 			UZIP.F.makeCodes(U.dtree, MD);  UZIP.F.revCodes(U.dtree, MD);
 			UZIP.F.makeCodes(U.itree, MH);  UZIP.F.revCodes(U.itree, MH);
-			
+
 			ltree = U.ltree;  dtree = U.dtree;
-			
+
 			putsE(out, pos,numl-257);  pos+=5;  // 286
 			putsE(out, pos,numd-  1);  pos+=5;  // 30
 			putsE(out, pos,numh-  4);  pos+=4;  // 19
-			
+
 			for(var i=0; i<numh; i++) putsE(out, pos+i*3, U.itree[(U.ordr[i]<<1)+1]);   pos+=3* numh;
 			pos = UZIP.F._codeTiny(lset, U.itree, out, pos);
 			pos = UZIP.F._codeTiny(dset, U.itree, out, pos);
 		}
-		
+
 		var off=o0;
 		for(var si=0; si<li; si+=2) {
 			var qb=lits[si], len=(qb>>>23), end = off+(qb&((1<<23)-1));
 			while(off<end) pos = UZIP.F._writeLit(data[off++], ltree, out, pos);
-			
+
 			if(len!=0) {
 				var qc = lits[si+1], dst=(qc>>16), lgi=(qc>>8)&255, dgi=(qc&255);
 				pos = UZIP.F._writeLit(257+lgi, ltree, out, pos);
 				putsE(out, pos, len-U.of0[lgi]);  pos+=U.exb[lgi];
-				
+
 				pos = UZIP.F._writeLit(dgi, dtree, out, pos);
 				putsF(out, pos, dst-U.df0[dgi]);  pos+=U.dxb[dgi];  off+=len;
 			}
@@ -519,7 +519,7 @@ UZIP.F._lenCodes = function(tree, set) {
 }
 UZIP.F._hufTree   = function(hst, tree, MAXL) {
 	var list=[], hl = hst.length, tl=tree.length, i=0;
-	for(i=0; i<tl; i+=2) {  tree[i]=0;  tree[i+1]=0;  }	
+	for(i=0; i<tl; i+=2) {  tree[i]=0;  tree[i+1]=0;  }
 	for(i=0; i<hl; i++) if(hst[i]!=0) list.push({lit:i, f:hst[i]});
 	var end = list.length, l2=list.slice(0);
 	if(end==0) return 0;  // empty histogram (usually for dist)
@@ -545,7 +545,7 @@ UZIP.F.setDepth  = function(t, d) {
 UZIP.F.restrictDepth = function(dps, MD, maxl) {
 	var i=0, bCost=1<<(maxl-MD), dbt=0;
 	dps.sort(function(a,b){return b.d==a.d ? a.f-b.f : b.d-a.d;});
-	
+
 	for(i=0; i<dps.length; i++) if(dps[i].d>MD) {  var od=dps[i].d;  dps[i].d=MD;  dbt+=bCost-(1<<(maxl-od));  }  else break;
 	dbt = dbt>>>(maxl-MD);
 	while(dbt>0) {  var od=dps[i].d;  if(od<MD) {  dps[i].d++;  dbt-=(1<<(MD-od-1));  }  else  i++;  }
@@ -571,22 +571,22 @@ UZIP.F.inflate = function(data, buf) {
 	if(data[0]==3 && data[1]==0) return (buf ? buf : new Uint8Array(0));
 	var F=UZIP.F, bitsF = F._bitsF, bitsE = F._bitsE, decodeTiny = F._decodeTiny, makeCodes = F.makeCodes, codes2map=F.codes2map, get17 = F._get17;
 	var U = F.U;
-	
+
 	var noBuf = (buf==null);
 	if(noBuf) buf = new Uint8Array((data.length>>2)<<3);
-	
-	var BFINAL=0, BTYPE=0, HLIT=0, HDIST=0, HCLEN=0, ML=0, MD=0; 	
+
+	var BFINAL=0, BTYPE=0, HLIT=0, HDIST=0, HCLEN=0, ML=0, MD=0;
 	var off = 0, pos = 0;
 	var lmap, dmap;
-	
-	while(BFINAL==0) {		
+
+	while(BFINAL==0) {
 		BFINAL = bitsF(data, pos  , 1);
 		BTYPE  = bitsF(data, pos+1, 2);  pos+=3;
 		//console.log(BFINAL, BTYPE);
-		
+
 		if(BTYPE==0) {
 			if((pos&7)!=0) pos+=8-(pos&7);
-			var p8 = (pos>>>3)+4, len = data[p8-4]|(data[p8-3]<<8);  //console.log(len);//bitsF(data, pos, 16), 
+			var p8 = (pos>>>3)+4, len = data[p8-4]|(data[p8-3]<<8);  //console.log(len);//bitsF(data, pos, 16),
 			if(noBuf) buf=UZIP.F._check(buf, off+len);
 			buf.set(new Uint8Array(data.buffer, data.byteOffset+p8, len), off);
 			//for(var i=0; i<len; i++) buf[off+i] = data[p8+i];
@@ -596,23 +596,23 @@ UZIP.F.inflate = function(data, buf) {
 		if(noBuf) buf=UZIP.F._check(buf, off+(1<<17));
 		if(BTYPE==1) {  lmap = U.flmap;  dmap = U.fdmap;  ML = (1<<9)-1;  MD = (1<<5)-1;   }
 		if(BTYPE==2) {
-			HLIT  = bitsE(data, pos   , 5)+257;  
-			HDIST = bitsE(data, pos+ 5, 5)+  1;  
+			HLIT  = bitsE(data, pos   , 5)+257;
+			HDIST = bitsE(data, pos+ 5, 5)+  1;
 			HCLEN = bitsE(data, pos+10, 4)+  4;  pos+=14;
-			
+
 			var ppos = pos;
 			for(var i=0; i<38; i+=2) {  U.itree[i]=0;  U.itree[i+1]=0;  }
 			var tl = 1;
 			for(var i=0; i<HCLEN; i++) {  var l=bitsE(data, pos+i*3, 3);  U.itree[(U.ordr[i]<<1)+1] = l;  if(l>tl)tl=l;  }     pos+=3*HCLEN;  //console.log(itree);
 			makeCodes(U.itree, tl);
 			codes2map(U.itree, tl, U.imap);
-			
+
 			lmap = U.lmap;  dmap = U.dmap;
-			
+
 			var ml = decodeTiny(U.imap, (1<<tl)-1, HLIT , data, pos, U.ltree); ML = (1<<(ml>>>24))-1;  pos+=(ml&0xffffff);
 			makeCodes(U.ltree, (ml>>>24));
 			codes2map(U.ltree, (ml>>>24), lmap);
-			
+
 			var md = decodeTiny(U.imap, (1<<tl)-1, HDIST, data, pos, U.dtree); MD = (1<<(md>>>24))-1;  pos+=(md&0xffffff);
 			makeCodes(U.dtree, (md>>>24));
 			codes2map(U.dtree, (md>>>24), dmap);
@@ -620,23 +620,23 @@ UZIP.F.inflate = function(data, buf) {
 		//var ooff=off, opos=pos;
 		while(true) {
 			var code = lmap[get17(data, pos) & ML];  pos += code&15;
-			var lit = code>>>4;  //U.lhst[lit]++;  
+			var lit = code>>>4;  //U.lhst[lit]++;
 			if((lit>>>8)==0) {  buf[off++] = lit;  }
 			else if(lit==256) {  break;  }
 			else {
 				var end = off+lit-254;
 				if(lit>264) { var ebs = U.ldef[lit-257];  end = off + (ebs>>>3) + bitsE(data, pos, ebs&7);  pos += ebs&7;  }
 				//UZIP.F.dst[end-off]++;
-				
+
 				var dcode = dmap[get17(data, pos) & MD];  pos += dcode&15;
 				var dlit = dcode>>>4;
 				var dbs = U.ddef[dlit], dst = (dbs>>>4) + bitsF(data, pos, dbs&15);  pos += dbs&15;
-				
+
 				//var o0 = off-dst, stp = Math.min(end-off, dst);
 				//if(stp>20) while(off<end) {  buf.copyWithin(off, o0, o0+stp);  off+=stp;  }  else
 				//if(end-dst<=off) buf.copyWithin(off, off-dst, end-dst);  else
 				//if(dst==1) buf.fill(buf[off-1], off, end);  else
-				while(off<end) {  buf[off]=buf[off++-dst];    buf[off]=buf[off++-dst];  buf[off]=buf[off++-dst];  buf[off]=buf[off++-dst];  }   
+				while(off<end) {  buf[off]=buf[off++-dst];    buf[off]=buf[off++-dst];  buf[off]=buf[off++-dst];  buf[off]=buf[off++-dst];  }
 				off=end;
 				//while(off!=end) {  buf[off]=buf[off++-dst];  }
 			}
@@ -689,19 +689,19 @@ UZIP.F.makeCodes = function(tree, MAX_BITS) {  // code, length
 	var U = UZIP.F.U;
 	var max_code = tree.length;
 	var code, bits, n, i, len;
-	
+
 	var bl_count = U.bl_count;  for(var i=0; i<=MAX_BITS; i++) bl_count[i]=0;
 	for(i=1; i<max_code; i+=2) bl_count[tree[i]]++;
-	
+
 	var next_code = U.next_code;	// smallest code for each length
-	
+
 	code = 0;
 	bl_count[0] = 0;
 	for (bits = 1; bits <= MAX_BITS; bits++) {
 		code = (code + bl_count[bits-1]) << 1;
 		next_code[bits] = code;
 	}
-	
+
 	for (n = 0; n < max_code; n+=2) {
 		len = tree[n+1];
 		if (len != 0) {
@@ -757,7 +757,7 @@ UZIP.F.U = {
 	ddef : new Uint32Array(32),
 	flmap: new Uint16Array(  512),  fltree: [],
 	fdmap: new Uint16Array(   32),  fdtree: [],
-	lmap : new Uint16Array(32768),  ltree : [], 
+	lmap : new Uint16Array(32768),  ltree : [],
 	dmap : new Uint16Array(32768),  dtree : [],
 	imap : new Uint16Array(  512),  itree : [],
 	//rev9 : new Uint16Array(  512)
@@ -779,9 +779,9 @@ UZIP.F.U = {
 		x = (((x & 0xff00ff00) >>> 8) | ((x & 0x00ff00ff) << 8));
 		U.rev15[i] = (((x >>> 16) | (x << 16)))>>>17;
 	}
-	
+
 	for(var i=0; i<32; i++) {  U.ldef[i]=(U.of0[i]<<3)|U.exb[i];  U.ddef[i]=(U.df0[i]<<4)|U.dxb[i];  }
-	
+
 	var i = 0;
 	for(; i<=143; i++) U.fltree.push(0,8);
 	for(; i<=255; i++) U.fltree.push(0,9);
@@ -790,15 +790,15 @@ UZIP.F.U = {
 	UZIP.F.makeCodes(U.fltree, 9);
 	UZIP.F.codes2map(U.fltree, 9, U.flmap);
 	UZIP.F.revCodes (U.fltree, 9)
-	
+
 	for(i=0;i<32; i++) U.fdtree.push(0,5);
 	UZIP.F.makeCodes(U.fdtree, 5);
 	UZIP.F.codes2map(U.fdtree, 5, U.fdmap);
 	UZIP.F.revCodes (U.fdtree, 5)
-	
+
 	for(var i=0; i< 19; i++) U.itree.push(0,0);
 	for(var i=0; i<286; i++) U.ltree.push(0,0);
 	for(var i=0; i< 30; i++) U.dtree.push(0,0);
 })()
 
-
+if(typeof module !== 'undefined' && typeof module.exports !== 'undefined') module.exports = UZIP;
