@@ -25,7 +25,7 @@ The API is the same as the API of pako.js, just use `UZIP.xyz...` instead of `pa
 
 #### `UZIP.deflate(buff)`
 * `buff`: Uint8Array of the original file
-* returns Uint8Array with ZLIB stream
+* returns Uint8Array with ZLIB stream  (2 byte header + DEFLATE stream + 4 byte checksum)
 
 These two functions have an optional third parameter: Options object,
 which can be `{level:L}`, where L is the level of compression (0 to 9).
@@ -35,7 +35,7 @@ which can be `{level:L}`, where L is the level of compression (0 to 9).
 * returns Uint8Array with decompressed bytes
 
 #### `UZIP.inflate(buff)`
-* `buff`: Uint8Array containing the ZLIB stream (2 byte header + deflate stream + 4 byte checksum)
+* `buff`: Uint8Array containing the ZLIB stream
 * returns Uint8Array with decompressed bytes
 
 These two functions have an optional third parameter: Output buffer (Uint8Array). 
