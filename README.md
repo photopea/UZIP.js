@@ -44,7 +44,9 @@ which can be `{level:L}`, where L is the level of compression (0 to 9).
 * returns Uint8Array with decompressed bytes
 
 These two functions have an optional third parameter: Output buffer (Uint8Array). 
-Practical uses of DEFLATE (like ZIP or PNG files) usually store the size of uncompressed data.
-If you provide the output buffer, decompression is faster.
+
+DEFLATE or ZLIB stream do not directly store the size of the output uncompressed data. Decompressors usually write the result into a small array, which is enlarged (copied into a bigger array) during the process.
+
+Practical applications of DEFLATE (like ZIP or PNG files) usually store the size of uncompressed data. If you provide the output buffer, decompression is faster (no need for gradual enlarging of the output array).
 
 
