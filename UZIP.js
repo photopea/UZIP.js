@@ -3,7 +3,7 @@
 var UZIP = {};
 
 
-UZIP["parse"] = function(buf)	// ArrayBuffer
+UZIP["parse"] = function(buf, onlyNames)	// ArrayBuffer
 {
 	var rUs = UZIP.bin.readUshort, rUi = UZIP.bin.readUint, o = 0, out = {};
 	var data = new Uint8Array(buf);
@@ -38,13 +38,13 @@ UZIP["parse"] = function(buf)	// ArrayBuffer
 		var roff = rUi(data, o);  o+=4;
 		o += nl + el + cl;
 		
-		UZIP._readLocal(data, roff, out, csize, usize);
+		UZIP._readLocal(data, roff, out, csize, usize, onlyNames);
 	}
 	//console.log(out);
 	return out;
 }
 
-UZIP._readLocal = function(data, o, out, csize, usize)
+UZIP._readLocal = function(data, o, out, csize, usize, onlyNames)
 {
 	var rUs = UZIP.bin.readUshort, rUi = UZIP.bin.readUint;
 	var sign  = rUi(data, o);  o+=4;
@@ -63,18 +63,23 @@ UZIP._readLocal = function(data, o, out, csize, usize)
 	var nlen  = rUs(data, o);  o+=2;
 	var elen  = rUs(data, o);  o+=2;
 		
-	var name =  UZIP.bin.readUTF8(data, o, nlen);  o+=nlen;
+	var name =  UZIP.bin.readUTF8(data, o, nlen);  o+=nlen;  //console.log(name);
 	o += elen;
 			
 	//console.log(sign.toString(16), ver, gpflg, cmpr, crc32.toString(16), "csize, usize", csize, usize, nlen, elen, name, o);
-			
+	if(onlyNames) {  out[name]={size:usize, csize:csize};  return;  }   
 	var file = new Uint8Array(data.buffer, o);
 	if(false) {}
 	else if(cmpr==0) out[name] = new Uint8Array(file.buffer.slice(o, o+csize));
 	else if(cmpr==8) {
 		var buf = new Uint8Array(usize);  UZIP.inflateRaw(file, buf);
-		//var nbuf = pako["inflateRaw"](file);
-		//for(var i=0; i<buf.length; i++) if(buf[i]!=nbuf[i]) {  console.log(buf.length, nbuf.length, usize, i);  throw "e";  }
+		/*var nbuf = pako["inflateRaw"](file);
+		if(usize>8514000) {
+			//console.log(PUtils.readASCII(buf , 8514500, 500));
+			//console.log(PUtils.readASCII(nbuf, 8514500, 500));
+		}
+		for(var i=0; i<buf.length; i++) if(buf[i]!=nbuf[i]) {  console.log(buf.length, nbuf.length, usize, i);  throw "e";  }
+		*/
 		out[name] = buf;
 	}
 	else throw "unknown compression method: "+cmpr;
@@ -253,24 +258,6 @@ UZIP.bin = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 UZIP.F = {};
 
 UZIP.F.deflateRaw = function(data, out, opos, lvl) {	
@@ -319,7 +306,7 @@ UZIP.F.deflateRaw = function(data, out, opos, lvl) {
 			strt[nc]=ii;
 		} //*/
 		if(cvrd<=i) {
-			if(li>14000 || lc>26697) {
+			if((li>14000 || lc>26697) && (dlen-i)>100) {
 				if(cvrd<i) {  lits[li]=i-cvrd;  li+=2;  cvrd=i;  }
 				pos = UZIP.F._writeBlock(((i==dlen-1) || (cvrd==dlen))?1:0, lits, li, ebits, data,bs,i-bs, out, pos);  li=lc=ebits=0;  bs=i;
 			}
@@ -568,12 +555,13 @@ UZIP.F._writeLit = function(ch, ltree, out, pos) {
 
 
 UZIP.F.inflate = function(data, buf) {
-	if(data[0]==3 && data[1]==0) return (buf ? buf : new Uint8Array(0));
+	var u8=Uint8Array;
+	if(data[0]==3 && data[1]==0) return (buf ? buf : new u8(0));
 	var F=UZIP.F, bitsF = F._bitsF, bitsE = F._bitsE, decodeTiny = F._decodeTiny, makeCodes = F.makeCodes, codes2map=F.codes2map, get17 = F._get17;
 	var U = F.U;
 	
 	var noBuf = (buf==null);
-	if(noBuf) buf = new Uint8Array((data.length>>2)<<3);
+	if(noBuf) buf = new u8((data.length>>>2)<<3);
 	
 	var BFINAL=0, BTYPE=0, HLIT=0, HDIST=0, HCLEN=0, ML=0, MD=0; 	
 	var off = 0, pos = 0;
@@ -588,12 +576,12 @@ UZIP.F.inflate = function(data, buf) {
 			if((pos&7)!=0) pos+=8-(pos&7);
 			var p8 = (pos>>>3)+4, len = data[p8-4]|(data[p8-3]<<8);  //console.log(len);//bitsF(data, pos, 16), 
 			if(noBuf) buf=UZIP.F._check(buf, off+len);
-			buf.set(new Uint8Array(data.buffer, data.byteOffset+p8, len), off);
+			buf.set(new u8(data.buffer, data.byteOffset+p8, len), off);
 			//for(var i=0; i<len; i++) buf[off+i] = data[p8+i];
 			//for(var i=0; i<len; i++) if(buf[off+i] != data[p8+i]) throw "e";
 			pos = ((p8+len)<<3);  off+=len;  continue;
 		}
-		if(noBuf) buf=UZIP.F._check(buf, off+(1<<17));
+		if(noBuf) buf=UZIP.F._check(buf, off+(1<<17));  // really not enough in many cases (but PNG and ZIP provide buffer in advance)
 		if(BTYPE==1) {  lmap = U.flmap;  dmap = U.fdmap;  ML = (1<<9)-1;  MD = (1<<5)-1;   }
 		if(BTYPE==2) {
 			HLIT  = bitsE(data, pos   , 5)+257;  
@@ -609,13 +597,17 @@ UZIP.F.inflate = function(data, buf) {
 			
 			lmap = U.lmap;  dmap = U.dmap;
 			
-			var ml = decodeTiny(U.imap, (1<<tl)-1, HLIT , data, pos, U.ltree); ML = (1<<(ml>>>24))-1;  pos+=(ml&0xffffff);
-			makeCodes(U.ltree, (ml>>>24));
-			codes2map(U.ltree, (ml>>>24), lmap);
+			pos = decodeTiny(U.imap, (1<<tl)-1, HLIT+HDIST, data, pos, U.ttree);
+			var mx0 = F._copyOut(U.ttree,    0, HLIT , U.ltree);  ML = (1<<mx0)-1;
+			var mx1 = F._copyOut(U.ttree, HLIT, HDIST, U.dtree);  MD = (1<<mx1)-1;
 			
-			var md = decodeTiny(U.imap, (1<<tl)-1, HDIST, data, pos, U.dtree); MD = (1<<(md>>>24))-1;  pos+=(md&0xffffff);
-			makeCodes(U.dtree, (md>>>24));
-			codes2map(U.dtree, (md>>>24), dmap);
+			//var ml = decodeTiny(U.imap, (1<<tl)-1, HLIT , data, pos, U.ltree); ML = (1<<(ml>>>24))-1;  pos+=(ml&0xffffff);
+			makeCodes(U.ltree, mx0);
+			codes2map(U.ltree, mx0, lmap);
+			
+			//var md = decodeTiny(U.imap, (1<<tl)-1, HDIST, data, pos, U.dtree); MD = (1<<(md>>>24))-1;  pos+=(md&0xffffff);
+			makeCodes(U.dtree, mx1);
+			codes2map(U.dtree, mx1, dmap);
 		}
 		//var ooff=off, opos=pos;
 		while(true) {
@@ -649,40 +641,40 @@ UZIP.F.inflate = function(data, buf) {
 }
 UZIP.F._check=function(buf, len) {
 	var bl=buf.length;  if(len<=bl) return buf;
-	var nbuf = new Uint8Array(bl<<1);
-	for(var i=0; i<bl; i+=4) {  nbuf[i]=buf[i];  nbuf[i+1]=buf[i+1];  nbuf[i+2]=buf[i+2];  nbuf[i+3]=buf[i+3];  }
+	var nbuf = new Uint8Array(Math.max(bl<<1,len));  nbuf.set(buf,0);
+	//for(var i=0; i<bl; i+=4) {  nbuf[i]=buf[i];  nbuf[i+1]=buf[i+1];  nbuf[i+2]=buf[i+2];  nbuf[i+3]=buf[i+3];  }
 	return nbuf;
 }
 
 UZIP.F._decodeTiny = function(lmap, LL, len, data, pos, tree) {
-	var opos = pos;
 	var bitsE = UZIP.F._bitsE, get17 = UZIP.F._get17;
-	var dlen = len<<1, i = 0, mx = 0;
-	//if(pos<1000) console.log("--------");
-	//console.log("----", pos, ":",  data[7],data[8], data[9], data[10], data[11]);
-	while(i<dlen) {
+	var i = 0;
+	while(i<len) {
 		var code = lmap[get17(data, pos)&LL];  pos+=code&15;
-		var lit = code>>>4;  //if(pos<1000) console.log(lit, i>>>1);
-		//if(i<20)console.log(lit, code>>>9, pos);
-		if(lit<=15) {  tree[i]=0;  tree[i+1]=lit;  if(lit>mx)mx=lit;   i+=2;  }
+		var lit = code>>>4; 
+		if(lit<=15) {  tree[i]=lit;  i++;  }
 		else {
 			var ll = 0, n = 0;
 			if(lit==16) {
-				n = (3  + bitsE(data, pos, 2))<<1;  pos += 2;  ll = tree[i-1];
+				n = (3  + bitsE(data, pos, 2));  pos += 2;  ll = tree[i-1];
 			}
 			else if(lit==17) {
-				n = (3  + bitsE(data, pos, 3))<<1;  pos += 3;
+				n = (3  + bitsE(data, pos, 3));  pos += 3;
 			}
 			else if(lit==18) {
-				n = (11 + bitsE(data, pos, 7))<<1;  pos += 7;
+				n = (11 + bitsE(data, pos, 7));  pos += 7;
 			}
 			var ni = i+n;
-			while(i<ni) {  tree[i]=0;  tree[i+1]=ll; i+=2; }
+			while(i<ni) {  tree[i]=ll;  i++; }
 		}
 	}
-	var tl = tree.length;
-	while(i<tl) {  tree[i+1]=0;  i+=2;  }
-	return (mx<<24)|(pos-opos);
+	return pos;
+}
+UZIP.F._copyOut = function(src, off, len, tree) {
+	var mx=0, i=0, tl=tree.length>>>1;
+	while(i<len) {  var v=src[i+off];  tree[(i<<1)]=0;  tree[(i<<1)+1]=v;  if(v>mx)mx=v;  i++;  }
+	while(i<tl ) {  tree[(i<<1)]=0;  tree[(i<<1)+1]=0;  i++;  }
+	return mx;
 }
 
 UZIP.F.makeCodes = function(tree, MAX_BITS) {  // code, length
@@ -713,7 +705,7 @@ UZIP.F.makeCodes = function(tree, MAX_BITS) {  // code, length
 UZIP.F.codes2map = function(tree, MAX_BITS, map) {
 	var max_code = tree.length;
 	var U=UZIP.F.U, r15 = U.rev15;
-	for(i=0; i<max_code; i+=2) if(tree[i+1]!=0)  {
+	for(var i=0; i<max_code; i+=2) if(tree[i+1]!=0)  {
 		var lit = i>>1;
 		var cl = tree[i+1], val = (lit<<4)|cl; // :  (0x8000 | (U.of0[lit-257]<<7) | (U.exb[lit-257]<<4) | cl);
 		var rest = (MAX_BITS-cl), i0 = tree[i]<<rest, i1 = i0 + (1<<rest);
@@ -744,31 +736,33 @@ UZIP.F._get17= function(dt, pos) {	// return at least 17 meaningful bytes
 UZIP.F._get25= function(dt, pos) {	// return at least 17 meaningful bytes
 	return (dt[pos>>>3] | (dt[(pos>>>3)+1]<<8) | (dt[(pos>>>3)+2]<<16) | (dt[(pos>>>3)+3]<<24) )>>>(pos&7);
 }
+UZIP.F.U = function(){
+	var u16=Uint16Array, u32=Uint32Array;
+	return {
+		next_code : new u16(16),
+		bl_count  : new u16(16),
+		ordr : [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ],
+		of0  : [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,999,999,999],
+		exb  : [0,0,0,0,0,0,0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,  4,  5,  5,  5,  5,  0,  0,  0,  0],
+		ldef : new u16(32),
+		df0  : [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577, 65535, 65535],
+		dxb  : [0,0,0,0,1,1,2, 2, 3, 3, 4, 4, 5, 5,  6,  6,  7,  7,  8,  8,   9,   9,  10,  10,  11,  11,  12,   12,   13,   13,     0,     0],
+		ddef : new u32(32),
+		flmap: new u16(  512),  fltree: [],
+		fdmap: new u16(   32),  fdtree: [],
+		lmap : new u16(32768),  ltree : [],  ttree:[],
+		dmap : new u16(32768),  dtree : [],
+		imap : new u16(  512),  itree : [],
+		//rev9 : new u16(  512)
+		rev15: new u16(1<<15),
+		lhst : new u32(286), dhst : new u32( 30), ihst : new u32(19),
+		lits : new u32(15000),
+		strt : new u16(1<<16),
+		prev : new u16(1<<15)
+	};  
+} ();
 
-UZIP.F.U = {
-	next_code : new Uint16Array(16),
-	bl_count  : new Uint16Array(16),
-	ordr : [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ],
-	of0  : [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,999,999,999],
-	exb  : [0,0,0,0,0,0,0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,  4,  5,  5,  5,  5,  0,  0,  0,  0],
-	ldef : new Uint16Array(32),
-	df0  : [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577, 65535, 65535],
-	dxb  : [0,0,0,0,1,1,2, 2, 3, 3, 4, 4, 5, 5,  6,  6,  7,  7,  8,  8,   9,   9,  10,  10,  11,  11,  12,   12,   13,   13,     0,     0],
-	ddef : new Uint32Array(32),
-	flmap: new Uint16Array(  512),  fltree: [],
-	fdmap: new Uint16Array(   32),  fdtree: [],
-	lmap : new Uint16Array(32768),  ltree : [], 
-	dmap : new Uint16Array(32768),  dtree : [],
-	imap : new Uint16Array(  512),  itree : [],
-	//rev9 : new Uint16Array(  512)
-	rev15: new Uint16Array(1<<15),
-	lhst : new Uint32Array(286), dhst : new Uint32Array( 30), ihst : new Uint32Array(19),
-	lits : new Uint32Array(15000),
-	strt : new Uint16Array(1<<16),
-	prev : new Uint16Array(1<<15)
-};
-
-(function(){
+(function(){	
 	var U = UZIP.F.U;
 	var len = 1<<15;
 	for(var i=0; i<len; i++) {
@@ -780,25 +774,53 @@ UZIP.F.U = {
 		U.rev15[i] = (((x >>> 16) | (x << 16)))>>>17;
 	}
 	
+	function pushV(tgt, n, sv) {  while(n--!=0) tgt.push(0,sv);  }
+	
 	for(var i=0; i<32; i++) {  U.ldef[i]=(U.of0[i]<<3)|U.exb[i];  U.ddef[i]=(U.df0[i]<<4)|U.dxb[i];  }
 	
+	pushV(U.fltree, 144, 8);  pushV(U.fltree, 255-143, 9);  pushV(U.fltree, 279-255, 7);  pushV(U.fltree,287-279,8);
+	/*
 	var i = 0;
 	for(; i<=143; i++) U.fltree.push(0,8);
 	for(; i<=255; i++) U.fltree.push(0,9);
 	for(; i<=279; i++) U.fltree.push(0,7);
 	for(; i<=287; i++) U.fltree.push(0,8);
+	*/
 	UZIP.F.makeCodes(U.fltree, 9);
 	UZIP.F.codes2map(U.fltree, 9, U.flmap);
 	UZIP.F.revCodes (U.fltree, 9)
 	
-	for(i=0;i<32; i++) U.fdtree.push(0,5);
+	pushV(U.fdtree,32,5);
+	//for(i=0;i<32; i++) U.fdtree.push(0,5);
 	UZIP.F.makeCodes(U.fdtree, 5);
 	UZIP.F.codes2map(U.fdtree, 5, U.fdmap);
 	UZIP.F.revCodes (U.fdtree, 5)
 	
+	pushV(U.itree,19,0);  pushV(U.ltree,286,0);  pushV(U.dtree,30,0);  pushV(U.ttree,320,0);
+	/*
 	for(var i=0; i< 19; i++) U.itree.push(0,0);
 	for(var i=0; i<286; i++) U.ltree.push(0,0);
 	for(var i=0; i< 30; i++) U.dtree.push(0,0);
+	for(var i=0; i<320; i++) U.ttree.push(0,0);
+	*/
 })()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
