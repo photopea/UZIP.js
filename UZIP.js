@@ -1,8 +1,7 @@
 
 
 var UZIP = {};
-
-if(typeof module == "object") module.exports = UTIF;
+if(typeof module == "object") module.exports = UZIP;
 
 
 UZIP["parse"] = function(buf, onlyNames)	// ArrayBuffer
@@ -258,6 +257,9 @@ UZIP.bin = {
 		return i;
 	}
 }
+
+
+
 
 
 
@@ -810,9 +812,6 @@ UZIP.F.U = function(){
 	for(var i=0; i<320; i++) U.ttree.push(0,0);
 	*/
 })()
-
-
-
 
 
 
