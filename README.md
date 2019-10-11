@@ -7,6 +7,22 @@ UZIP.js is faster than pako.js
 - Deflate (compression) is almost always faster
 - May produce smaller files than pako.js / ZLIB level 9 (especially for hard to compress data)
 
+## Installation
+
+**Web**: Add the `UZIP.js` script to your webpage:
+
+```html
+<script src="UZIP.js"></script>
+```
+
+**NodeJS**: Install the [`uzip` package](https://www.npmjs.com/package/uzip):
+
+```
+npm install uzip
+```
+
+## Interface
+
 #### `UZIP.parse(buff)`
 * `buff`: ArrayBuffer of the ZIP file
 * returns an object with `key : property` pairs, where `key` is a file name (String), and `property` is a file (Uint8Array)
