@@ -17,8 +17,10 @@ UZIP.js is faster than pako.js
 
 Directories should be "included" inside file names.
 
+```js
     var obj = { "file.txt":new Uint8Array([72,69,76,76,79]),  "dir/photo.jpg":...,  "dir/pic.png":... };       
     var zip = UZIP.encode(obj);
+```
 
 ## Deflate compression
 
