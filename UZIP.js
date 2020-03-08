@@ -262,8 +262,6 @@ UZIP.bin = {
 
 
 
-
-
 UZIP.F = {};
 
 UZIP.F.deflateRaw = function(data, out, opos, lvl) {	
@@ -812,6 +810,8 @@ UZIP.F.U = function(){
 	for(var i=0; i<320; i++) U.ttree.push(0,0);
 	*/
 })()
+
+
 
 
 
