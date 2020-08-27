@@ -21,6 +21,12 @@ UZIP.js is faster than pako.js
 npm install uzip
 ```
 
+**ESM**: Use https://github.com/TomasHubelbauer/esm-uzip-js (automatically updated daily)
+
+```js
+import UZIP from 'https://tomashubelbauer.github.io/esm-uzip-js/index.js';
+```
+
 ## Interface
 
 #### `UZIP.parse(buff)`
