@@ -1,6 +1,6 @@
 # UZIP.js
 
-Simple, tiny and fast ZIP library. It has our own DEFLATE compressor and decompressor (alternative to pako.js / ZLIB). It was made from scratch, without using existing implemetnations.
+Simple, tiny and fast ZIP library. It has our own DEFLATE compressor and decompressor (alternative to pako.js / ZLIB). It was made from scratch, without using existing implementations.
 
 UZIP.js is faster than pako.js
 - Inflate (decompression): 40% faster than Pako in Chrome, up to 50% faster in Firefox
