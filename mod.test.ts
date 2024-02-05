@@ -1,16 +1,26 @@
 import { encode, parse } from "./mod.ts";
 import { assertEquals } from "https://deno.land/std@0.214.0/assert/mod.ts";
 
-Deno.test("parse - should return an object with file names and sizes", async () => {
-  const obj = {
-    "file1.txt": new Uint8Array([72, 69, 76, 76, 79]),
-    "file2.txt": new Uint8Array([72, 69, 76, 76, 79]),
-    // ... add more file names and data ...
-  };
-  const zip = await encode(obj);
+Deno.test("zip and unzip", async (t) => {
+  await t.step("text files", async () => {
+    const obj = {
+      "file1.txt": new Uint8Array([72, 69, 76, 76, 79]),
+      "file2.txt": new Uint8Array([72, 69, 76, 76, 79]),
+    };
 
-  const result = await parse(new Uint8Array(zip));
+    assertEquals(await parse(await encode(obj)), obj);
+  });
 
-  // Assert the expected output
-  assertEquals(result, obj);
+  await t.step("UTF-8 filename", async () => {
+    const obj = {
+      "ファイル.txt": new Uint8Array([72, 69, 76, 76, 79]),
+      "✅☺👍.txt": new Uint8Array([72, 69, 76, 76, 79]),
+    };
+
+    assertEquals(await parse(await encode(obj)), obj);
+  });
+  await t.step("test", async () => {
+
+    console.log(await parse(await Deno.readFile("test.apkg")));
+  });
 });
