@@ -1,30 +1,30 @@
-import {
-  readUint,
-  readUshort,
-  readUTF8,
-  sizeUTF8,
-  writeUint,
-  writeUshort,
-  writeUTF8,
-} from "./readUshort.ts";
+/**
+ * Parses a zip file and extracts its contents.
+ * @param buf the zip file data.
+ * @param onlyNames If true, only the names of the files will be returned.
+ * @returns A record object containing the extracted files, where the keys are the file names and the values are either the file data or an object with the properties `size` and `csize`.
+ */
+export const parse = async (
+  buf: Readonly<Uint8Array>,
+  onlyNames?: boolean,
+): Promise<Record<string, { size: number; csize: number } | Uint8Array>> => {
+  let eocd = buf.length - 4;
 
-export const parse = async (buf: Uint8Array, onlyNames?: boolean) => {
-  const data = new Uint8Array(buf);
-  let eocd = data.length - 4;
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
 
-  while (readUshort(data, eocd) != 0x06054b50) eocd--;
+  while (view.getUint32(eocd, true) !== 0x06054b50) eocd--;
 
   let o = eocd;
   o += 4; // sign  = 0x06054b50
   o += 4; // disks = 0;
-  const cnu = readUshort(data, o);
+  const cnu = view.getUint16(o, true);
   o += 2;
   //   const cnt = readUshort(data, o);
   o += 2;
 
   //   const csize = readUint(data, o);
   o += 4;
-  const coffs = readUint(data, o);
+  const coffs = view.getUint32(o, true);
   o += 4;
 
   o = coffs;
@@ -38,23 +38,25 @@ export const parse = async (buf: Uint8Array, onlyNames?: boolean) => {
 
     // const crc32 = readUint(data, o);
     o += 4;
-    const csize = readUint(data, o);
+    const csize = view.getUint32(o, true);
     o += 4;
-    const usize = readUint(data, o);
+    const usize = view.getUint32(o, true);
     o += 4;
 
-    const nl = readUshort(data, o),
-      el = readUshort(data, o + 2),
-      cl = readUshort(data, o + 4);
-    o += 6; // name, extra, comment
+    const nl = view.getUint16(o, true);
+    o += 2;
+    const el = view.getUint16(o, true);
+    o += 2;
+    const cl = view.getUint16(o, true);
+    o += 2;
     o += 8; // disk, attribs
 
-    const roff = readUint(data, o);
+    const roff = view.getUint32(o, true);
     o += 4;
     o += nl + el + cl;
 
     const { name, ...file } = await readLocal(
-      data,
+      view,
       roff,
       csize,
       usize,
@@ -67,7 +69,7 @@ export const parse = async (buf: Uint8Array, onlyNames?: boolean) => {
 };
 
 const readLocal = async (
-  data: Uint8Array,
+  data: Readonly<DataView>,
   o: number,
   csize: number,
   usize: number,
@@ -85,7 +87,7 @@ const readLocal = async (
   //   const gpflg = readUshort(data, o);
   o += 2;
   //if((gpflg&8)!=0) throw "unknown sizes";
-  const cmpr = readUshort(data, o);
+  const cmpr = data.getUint16(o, true);
   o += 2;
 
   //   const time = readUint(data, o);
@@ -97,31 +99,23 @@ const readLocal = async (
   //var usize = readUint(data, o);  o+=4;
   o += 8;
 
-  const nlen = readUshort(data, o);
+  const nlen = data.getUint16(o, true);
   o += 2;
-  const elen = readUshort(data, o);
+  const elen = data.getUint16(o, true);
   o += 2;
-
-  const name = readUTF8(data, o, nlen);
+  const name = new TextDecoder().decode(
+    new Uint8Array(data.buffer, data.byteOffset + o, nlen),
+  );
   o += nlen; //console.log(name);
   o += elen;
 
-  //console.log(sign.toString(16), ver, gpflg, cmpr, crc32.toString(16), "csize, usize", csize, usize, nlen, elen, name, o);
   if (onlyNames) return { name, size: usize, csize };
 
-  const file = new Uint8Array(data.buffer, o);
+  const file = new Uint8Array(data.buffer, data.byteOffset + o, csize);
   if (cmpr == 0) {
-    return { name, file: new Uint8Array(file.buffer.slice(o, o + csize)) };
+    return { name, file: new Uint8Array(file) };
   } else if (cmpr == 8) {
-    const buf = new Uint8Array(
-      await new Response(
-        new Response(file).body?.pipeThrough(
-          new CompressionStream("inflate-raw"),
-        ),
-      ).arrayBuffer(),
-    );
-
-    return { name, file: buf };
+    return { name, file: await inflateRaw(file) };
   } else throw "unknown compression method: " + cmpr;
 };
 
@@ -132,10 +126,17 @@ interface File {
   file: Uint8Array;
 }
 
+/**
+ * Compresses an object where the keys represent file names and the values represent data, and creates a zip file.
+ *
+ * @param obj - The object containing the data to be compressed.
+ * @param noCmpr - Optional. If set to true, compression will be disabled. Default is false.
+ * @returns The compressed data
+ */
 export const encode = async (
-  obj: Record<string, Uint8Array>,
+  obj: Readonly<Record<string, Uint8Array>>,
   noCmpr?: boolean,
-) => {
+): Promise<Uint8Array> => {
   if (noCmpr == null) noCmpr = false;
   let tot = 0;
   const zpd: Record<string, Promise<File>> = Object.fromEntries(
@@ -155,7 +156,8 @@ export const encode = async (
   );
 
   for (const p in zpd) {
-    tot += (await zpd[p]).file.length + 30 + 46 + 2 * sizeUTF8(p);
+    tot += (await zpd[p]).file.length + 30 + 46 +
+      2 * (new TextEncoder().encode(p)).length;
   }
   tot += 22;
 
@@ -189,9 +191,10 @@ export const encode = async (
   writeUint(data, o, ioff);
   o += 4;
   o += 2;
-  return data.buffer;
+  return data;
 };
-// no need to compress .PNG, .ZIP, .JPEG ....
+
+/** no need to compress .PNG, .ZIP, .JPEG ....*/
 const noNeed = (fn: string) => {
   const ext = fn.split(".").pop()!.toLowerCase();
   return ["png", "jpg", "jpeg", "zip"].includes(ext);
@@ -226,7 +229,8 @@ const writeHeader = (
   writeUint(data, o, obj.usize);
   o += 4; // usize
 
-  writeUshort(data, o, sizeUTF8(p));
+  const pBuf = new TextEncoder().encode(p);
+  writeUshort(data, o, pBuf.length);
   o += 2; // nlen
   writeUshort(data, o, 0);
   o += 2; // elen
@@ -238,8 +242,8 @@ const writeHeader = (
     writeUint(data, o, roff!);
     o += 4; // usize
   }
-  const nlen = writeUTF8(data, o, p);
-  o += nlen;
+  data.set(pBuf, o);
+  o += pBuf.length;
   if (t == 0) {
     data.set(file, o);
     o += file.length;
@@ -270,9 +274,35 @@ const update = (c: number, buf: Uint8Array, off: number, len: number) => {
   }
   return c;
 };
-const deflateRaw = async (buf: BodyInit) =>
+const inflateRaw = async (
+  buffer: Blob | BufferSource | ReadableStream<Uint8Array>,
+) =>
   new Uint8Array(
     await new Response(
-      new Response(buf).body!.pipeThrough(new CompressionStream("deflate-raw")),
+      new Response(buffer).body!.pipeThrough(
+        new DecompressionStream("deflate-raw"),
+      ),
     ).arrayBuffer(),
   );
+
+const deflateRaw = async (
+  buffer: Blob | BufferSource | ReadableStream<Uint8Array>,
+) =>
+  new Uint8Array(
+    await new Response(
+      new Response(buffer).body!.pipeThrough(
+        new CompressionStream("deflate-raw"),
+      ),
+    ).arrayBuffer(),
+  );
+
+const writeUshort = (buff: Uint8Array, p: number, n: number) => {
+  buff[p] = n & 255;
+  buff[p + 1] = (n >> 8) & 255;
+};
+const writeUint = (buff: Uint8Array, p: number, n: number) => {
+  buff[p] = n & 255;
+  buff[p + 1] = (n >> 8) & 255;
+  buff[p + 2] = (n >> 16) & 255;
+  buff[p + 3] = (n >> 24) & 255;
+};
