@@ -1,4 +1,4 @@
-import { encode, parse } from "./mod.ts";
+import { encode, decode } from "./mod.ts";
 import { assertEquals } from "https://deno.land/std@0.214.0/assert/mod.ts";
 
 Deno.test("zip and unzip", async (t) => {
@@ -8,7 +8,7 @@ Deno.test("zip and unzip", async (t) => {
       "file2.txt": new Uint8Array([72, 69, 76, 76, 79]),
     };
 
-    assertEquals(await parse(await encode(obj)), obj);
+    assertEquals(await decode(await encode(obj)), obj);
   });
 
   await t.step("UTF-8 filename", async () => {
@@ -17,10 +17,10 @@ Deno.test("zip and unzip", async (t) => {
       "✅☺👍.txt": new Uint8Array([72, 69, 76, 76, 79]),
     };
 
-    assertEquals(await parse(await encode(obj)), obj);
+    assertEquals(await decode(await encode(obj)), obj);
   });
   await t.step("test", async () => {
 
-    console.log(await parse(await Deno.readFile("test.apkg")));
+    console.log(await decode(await Deno.readFile("test.apkg")));
   });
 });

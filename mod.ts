@@ -1,10 +1,10 @@
 /**
- * Parses a zip file and extracts its contents.
+ * Decode a zip file and extracts its contents.
  * @param buf the zip file data.
  * @param onlyNames If true, only the names of the files will be returned.
  * @returns A record object containing the extracted files, where the keys are the file names and the values are either the file data or an object with the properties `size` and `csize`.
  */
-export const parse = async (
+export const decode = async (
   buf: Readonly<Uint8Array>,
   onlyNames?: boolean,
 ): Promise<Record<string, { size: number; csize: number } | Uint8Array>> => {
