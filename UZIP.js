@@ -415,7 +415,7 @@ var UZIP = {};
 		return data.buffer;
 	}
 	// no need to compress .PNG, .ZIP, .JPEG ....
-	function _noNeed(fn) {  var ext = fn.split(".").pop().toLowerCase();  return "png,jpg,jpeg,zip".indexOf(ext)!=-1;  }
+	function _noNeed(fn) {  var ext = fn.split(".").pop().toLowerCase();  return ["png","jpg","jpeg","webp","zip","mp3","mp4"].indexOf(ext)!=-1;  }
 
 	function _writeHeader(data, o, p, obj, t, roff)
 	{
@@ -462,7 +462,6 @@ var UZIP = {};
 	UZIP["parse"     ] = parse;
 	UZIP["encode"    ] = encode;
 })();
-
 
 
 
