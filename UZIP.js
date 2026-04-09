@@ -29,6 +29,8 @@ var UZIP = {};
 			}
 			return out;
 		},
+		// Decode UTF-8 bytes into a JavaScript UTF-16 string. The helper below 'readUnicodeCodePoint' is
+		// for the opposite direction: reading Unicode code points from a JS string.
 		readUTF8 : function(buff, p, l) {
 			var s = "", ns;
 			for(var i=0; i<l; i++) s += "%" + B.pad(buff[p+i].toString(16));
@@ -36,11 +38,39 @@ var UZIP = {};
 			catch(e) {  return B.readASCII(buff, p, l);  }
 			return  ns;
 		},
+		/**
+		 * Read one Unicode code point from a JavaScript string.
+		 *
+		 * JavaScript strings are UTF-16, so characters outside the BMP are stored
+		 * as a surrogate pair (two code units). UTF-8 encoding, however, needs the
+		 * full Unicode code point value.
+		 *
+		 * Returns a tuple:
+		 *   [0] => the Unicode code point value
+		 *   [1] => how many UTF-16 code units were consumed from the string
+		 */
+		readUnicodeCodePoint : function(str, ci) {
+			var c1 = str.charCodeAt(ci);
+			// High surrogate: try to combine it with the following low surrogate.
+			if(c1>=0xd800 && c1<=0xdbff && ci+1<str.length) {
+				var c2 = str.charCodeAt(ci+1);
+				// Valid surrogate pair -> convert the two UTF-16 code units into one
+				// Unicode code point.
+				if(c2>=0xdc00 && c2<=0xdfff) return [((c1-0xd800)<<10) + (c2-0xdc00) + 0x10000, 2];
+			}
+			// Lone low surrogate is invalid on its own. Return U+FFFD so callers can
+			// encode a replacement character instead of emitting malformed UTF-8.
+			if(c1>=0xdc00 && c1<=0xdfff) return [0xfffd, 1];
+			// Plain BMP code point; one UTF-16 code unit maps directly.
+			return [c1, 1];
+		},
 		writeUTF8 : function(buff, p, str) {
 			var strl = str.length, i=0;
-			for(var ci=0; ci<strl; ci++)
+			for(var ci=0; ci<strl; )
 			{
-				var code = str.charCodeAt(ci);
+				// Read by Unicode code point, not by raw UTF-16 code unit, so astral
+				// characters are encoded as a single 4-byte UTF-8 sequence.
+				var cp = B.readUnicodeCodePoint(str, ci), code = cp[0];  ci += cp[1];
 				if     ((code&(0xffffffff-(1<< 7)+1))==0) {  buff[p+i] = (     code     );  i++;  }
 				else if((code&(0xffffffff-(1<<11)+1))==0) {  buff[p+i] = (192|(code>> 6));  buff[p+i+1] = (128|((code>> 0)&63));  i+=2;  }
 				else if((code&(0xffffffff-(1<<16)+1))==0) {  buff[p+i] = (224|(code>>12));  buff[p+i+1] = (128|((code>> 6)&63));  buff[p+i+2] = (128|((code>>0)&63));  i+=3;  }
@@ -51,9 +81,11 @@ var UZIP = {};
 		},
 		sizeUTF8 : function(str) {
 			var strl = str.length, i=0;
-			for(var ci=0; ci<strl; ci++)
+			for(var ci=0; ci<strl; )
 			{
-				var code = str.charCodeAt(ci);
+				// Use the same code point traversal as writeUTF8 so the computed byte
+				// length always matches the actual UTF-8 bytes we will write.
+				var cp = B.readUnicodeCodePoint(str, ci), code = cp[0];  ci += cp[1];
 				if     ((code&(0xffffffff-(1<< 7)+1))==0) {  i++ ;  }
 				else if((code&(0xffffffff-(1<<11)+1))==0) {  i+=2;  }
 				else if((code&(0xffffffff-(1<<16)+1))==0) {  i+=3;  }
